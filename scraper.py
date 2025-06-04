@@ -8,9 +8,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import pandas as pd
 import time
 
 browser_path = "/usr/bin/firefox"
+
+result_dataframe = pd.DataFrame()
 
 def main() -> None:
     options = Options()
@@ -98,19 +101,31 @@ def main() -> None:
         for bundesland_url in bundesland_urls:
             wait_random()
             driver.get(bundesland_url)
-            element = read_out_element(driver, By.XPATH, "/html/body/div/div[2]/div[4]/ol")
-            stadt_elements = element.find_elements(By.TAG_NAME, "li")
-            for e in stadt_elements:
-                stadt_urls.append(e.find_element(By.TAG_NAME, "a").get_attribute("href"))
-            print(bundesland_url + ": " + str(stadt_urls) + "\n--------------")
+            if check_for_element(driver, By.CLASS_NAME, "opt-rank-list-section"):
+                element = read_out_element(driver, By.XPATH, "/html/body/div/div[2]/div[4]/ol")
+                stadt_elements = element.find_elements(By.TAG_NAME, "li")
+                for e in stadt_elements:
+                    stadt_urls.append(e.find_element(By.TAG_NAME, "a").get_attribute("href"))
+            else:
+                stadt_urls.append(bundesland_url)
+            print(str(stadt_urls) + "\n--------------")
 
+        # Nachdem die URLs aller Städte ausgelesen wurden, rufe hintereinander alle Städte auf
+        for stadt_url in stadt_urls:
+            wait_random()
+            driver.get(stadt_url)
+
+            # Rufe "alle Angebote anzeigen" für die jeweilige Stadt auf
+            element = read_out_element(driver, By.LINK_TEXT, "Alle Angebote anzeigen")
+            driver.get(element.get_attribute("href"))
+            
 
     finally:
         # Graceful shutdown
         driver.quit()
 
 
-def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 10.0) -> bool:
+def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 5.0) -> bool:
     """
     Prüft, ob ein spezifiziertes Element im DOM vorhanden ist.
 
@@ -123,7 +138,7 @@ def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: s
     element_identifier : str
         Der eindeutige Identifier, welcher gesucht wird
     timeout : float
-        Die Zeit, welche das zu suchende Element maximal laden darf
+        Die Zeit in Sekunden, welche das zu suchende Element maximal laden darf, bevor es als "nicht existierend" zurückgegeben wird, by default 5.0
 
     Returns
     -------
