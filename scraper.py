@@ -1,15 +1,191 @@
-import pandas as pd
-import selenium
-import logging
+import random
+from selenium.webdriver.remote.webelement import WebElement
+from tokenize import String
+from selenium import webdriver
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
 
-
+browser_path = "/usr/bin/firefox"
 
 def main() -> None:
-    pass
+    options = Options()
+    options.headless = False
+
+    # Liste von Cookies, welche von der Website benötigt werden, damit der Cookiebanner nicht angezeigt wird.
+    necessary_cookies = [
+        {
+            "name":     "_asse",
+            "value":    "cm:eyJzbSI6WyIxfDE3NDg5MzgzMjgwMjd8MHwwfDB8biIsMTgxMjAxMDMyODAyN119",
+            "secure":   False
+        },
+        {
+            "name":     "_cq_duid",
+            "value":    "1.1748938746.k917G3inM7mKC8Nh",
+            "secure":   True
+        },
+        {
+            "name":     "_cq_pxg",
+            "value":    "3|6652109758",
+            "secure":   True
+        },
+        {
+            "name":     "_cq_suid",
+            "value":    "1.1748938746.299na4GA431p7721",
+            "secure":   True
+        },
+        {
+            "name":     "addtl_consent",
+            "value":    "1~",
+            "secure":   False
+        },
+        {
+            "name":     "as24-cmp-signature",
+            "value":    "L%2BmhqL7G7PwLQWoFaJYzr9mAGTvG9Xdndl3tNFDEccicI4NjOFbBwsKevt3xnBPL%2F292Q3ORYs5VXs44zk3n%2BN4qOy4QahDz8gSkS2v%2BPWIFm7oyJqj9x6tRx9ikzjh0mIRJu8%2FIiqj6K4%2FyPtnQQO1IVBIAWOXf9a6iFQX0Mbs%3D",
+            "secure":   False
+        },
+        {
+            "name":     "as24Visitor",
+            "value":    "ca813bb2-ddcd-4568-8240-40426ec50860",
+            "secure":   False
+        },
+        {
+            "name":     "cconsent-v2",
+            "value":    "%7B%22purpose%22%3A%7B%22legitimateInterests%22%3A%5B25%5D%2C%22consents%22%3A%5B%5D%7D%2C%22vendor%22%3A%7B%22legitimateInterests%22%3A%5B10218%2C10441%2C11006%2C11005%2C11019%5D%2C%22consents%22%3A%5B%5D%7D%7D",
+            "secure":   False
+        },
+        {
+            "name":     "euconsent-v2",
+            "value":    "CQSbk4AQSbk4AGNAGCDEBjFgAAAAAAAAAAAAAAAAAADBIEQACwAKgAcAA8ACCAF4AaAA8ACYAFUAN4AfgBCQCGAIkARwAmgBhgDLAHOAO4Ae0A_AD9AI4ASUBIgChwFHgKRAWwAuQBkgDMwGrgQhAoQOgUgALAAqABwAEEALwA0AB4AEwAKYAVQAugBiADeAH6AQwBEgCOAE0AKMAYYA0QBzgDuAHtAPwA_QCLQEcAR0AkoB1AEXgJEATIAocBR4C2AFyAMkAZUAywBmYDVwHFgUIIQCgAFgBVADEAG8Ac4A7gCOAEpAOoAuQlATAAWABwAHgATAAqgBigEMARIAjgBRgD8AI4AdQBF4CRAFHgLYAZIAywCEJSA4AAsACoAHAAQQAyADQAHgATAAqgBiAD9AIYAiQBHACjAGiAOeAfgB-gEWgI4AjoBJQDqAIvASIAocBbAC5AGSAMsAhCWgCADuAI4AocBmYAAA.cAAAAAAAA4CA",
+            "secure":   False
+        },
+    ]
+
+    # Geckodriver ermöglicht das Kommunizieren mit Firefox über Python
+    gecko_path = "/usr/bin/geckodriver"
+
+    # Webdriver initialisieren
+    service = Service(gecko_path)
+    driver = webdriver.Firefox(service=service, options=options)
+
+    try:
+        bundesland_urls = []
+        stadt_urls = []
+
+        # Zielseite aufrufen
+        url = "https://www.autoscout24.de/auto/gebrauchtwagen/"
+        driver.get(url)
+
+        # Nach dem ersten Aufruf der Website alle Cookies hinzufügen und danach einmal refreshen
+        for cookie in necessary_cookies:
+            driver.add_cookie(cookie)
+        driver.refresh()
+
+        # Suche die Deutschlandkarte raus und speichere alle darin enthaltenen URLs der Bundesländer zwischen.
+        element = read_out_element(driver, By.ID, "Deutschland", 5.0)
+        bundesland_elements = element.find_elements(By.TAG_NAME, "a")
+        for e in bundesland_elements:
+            bundesland_urls.append(e.get_attribute("xlink:href"))
+        print(bundesland_urls)
+
+        # Rufe hintereinander alle Bundesländer auf und schreibe aus jedem alle Städte-Links raus
+        # Da bestimmte Bundesländer (wie Berlin) sofort Autos anzeigen, wird erst getestet, ob das der Fall ist.
+        # Wenn ja, wird die Bundesland URL auch direkt zu den Städten hinzugefügt
+        for bundesland_url in bundesland_urls:
+            wait_random()
+            driver.get(bundesland_url)
+            element = read_out_element(driver, By.XPATH, "/html/body/div/div[2]/div[4]/ol")
+            stadt_elements = element.find_elements(By.TAG_NAME, "li")
+            for e in stadt_elements:
+                stadt_urls.append(e.find_element(By.TAG_NAME, "a").get_attribute("href"))
+            print(bundesland_url + ": " + str(stadt_urls) + "\n--------------")
 
 
+    finally:
+        # Graceful shutdown
+        driver.quit()
 
 
+def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 10.0) -> bool:
+    """
+    Prüft, ob ein spezifiziertes Element im DOM vorhanden ist.
+
+    Parameters
+    ----------
+    driver : webdriver.Firefox
+        Die Driver-Instanz von Firefox
+    type : By
+        Der Typ des Identifiers, auf welchen getestet werden soll
+    element_identifier : str
+        Der eindeutige Identifier, welcher gesucht wird
+    timeout : float
+        Die Zeit, welche das zu suchende Element maximal laden darf
+
+    Returns
+    -------
+    bool
+        Ob das Element mit dem Identifier im DOM existiert
+    """
+    try:
+        # Prüfe auf das Element
+        wait = WebDriverWait(driver, timeout)
+        wait.until(EC.presence_of_element_located((type, element_identifier)))
+        return True
+    except Exception as e:
+        return False
+
+
+def read_out_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 10.0) -> WebElement:
+    """
+    Hilfsfunktion, welche wartet, bis ein Element im DOM geladen ist und daraufhin das Element über den type und identifier zurückgibt.
+
+    Parameters
+    ----------
+    driver : webdriver.Firefox
+        Die Instanz des Firefox-Webdrivers, welcher die Webseite anspricht
+    type : By
+        Typ des Elements.
+    element_identifier : str
+        Abhängig vom Typ der String, mit welchem das Element im DOM identifiziert werden kann.
+    timeout : float, optional
+        Wie lange die Funktion maximal das Laden des Elements erwartet in Sekunden. Wird das Element nicht rechtzeitig geladen oder existiert nicht, wird eine TimeoutException geworfen, by default 10.0
+
+    Returns
+    -------
+    WebElement
+        das erste, gefundene Element.
+
+    Raises
+    ------
+    TimeoutException
+        Falls das Element nicht innerhalb des Timeout-Limits gefunden wird.
+    """
+    try:
+        # Warte bis das Element geladen ist und versuch es dann auszulesen
+        wait = WebDriverWait(driver, timeout)
+        element: WebElement = wait.until(EC.presence_of_element_located((type, element_identifier)))
+        return element
+    except Exception as e:
+        raise e
+
+
+def wait_random(min: float = 0.5, max: float = 3.0) -> None:
+    """
+    Legt den Scraper für eine zufällige Zeit lang schlafen, um automatische Blockung durch zu viele, schnell aufeinanderfolgende Abfragen vorzubeugen
+
+    Parameters
+    ----------
+    min : float, optional
+        die minimale Wartezeit in Sekunden, by default 0.5
+    max : float, optional
+        die maximale Wartezeit in Sekunden, by default 3.0
+    """
+    delay = random.uniform(a = min, b = max)
+    time.sleep(delay)
 
 
 
