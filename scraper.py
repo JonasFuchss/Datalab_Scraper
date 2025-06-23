@@ -1,3 +1,10 @@
+import selenium
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.remote.webelement import WebElement
+from pandas.core.frame import DataFrame
+import json
+
+
 import random
 from selenium.webdriver.remote.webelement import WebElement
 from tokenize import String
@@ -13,7 +20,7 @@ import time
 
 browser_path = "/usr/bin/firefox"
 
-result_dataframe = pd.DataFrame()
+result_dataframe: DataFrame = pd.DataFrame()
 
 def main() -> None:
     options = Options()
@@ -76,8 +83,7 @@ def main() -> None:
     driver = webdriver.Firefox(service=service, options=options)
 
     try:
-        bundesland_urls = []
-        stadt_urls = []
+        stadt_urls: list[str] = []
 
         # Zielseite aufrufen
         url = "https://www.autoscout24.de/auto/gebrauchtwagen/"
@@ -88,27 +94,41 @@ def main() -> None:
             driver.add_cookie(cookie)
         driver.refresh()
 
-        # Suche die Deutschlandkarte raus und speichere alle darin enthaltenen URLs der Bundesländer zwischen.
-        element = read_out_element(driver, By.ID, "Deutschland", 5.0)
-        bundesland_elements = element.find_elements(By.TAG_NAME, "a")
-        for e in bundesland_elements:
-            bundesland_urls.append(e.get_attribute("xlink:href"))
-        print(bundesland_urls)
+        # Wenn die Stadt-URLs schon in der Datei existieren lese die URLs einfach nur aus. Sonst: Scrape neu.
+        try:
+            with open("city_urls.txt", "r", encoding="utf-8") as f:
+                stadt_urls = json.load(f)
+                f.close()
+        except FileNotFoundError:
+            print("Keine Datei mit Stadt-URLs gefunden. Scrape neu.")
+            bundesland_urls = []
 
-        # Rufe hintereinander alle Bundesländer auf und schreibe aus jedem alle Städte-Links raus
-        # Da bestimmte Bundesländer (wie Berlin) sofort Autos anzeigen, wird erst getestet, ob das der Fall ist.
-        # Wenn ja, wird die Bundesland URL auch direkt zu den Städten hinzugefügt
-        for bundesland_url in bundesland_urls:
-            wait_random()
-            driver.get(bundesland_url)
-            if check_for_element(driver, By.CLASS_NAME, "opt-rank-list-section"):
-                element = read_out_element(driver, By.XPATH, "/html/body/div/div[2]/div[4]/ol")
-                stadt_elements = element.find_elements(By.TAG_NAME, "li")
-                for e in stadt_elements:
-                    stadt_urls.append(e.find_element(By.TAG_NAME, "a").get_attribute("href"))
-            else:
-                stadt_urls.append(bundesland_url)
-            print(str(stadt_urls) + "\n--------------")
+            # Suche die Deutschlandkarte raus und speichere alle darin enthaltenen URLs der Bundesländer zwischen.
+            element = read_out_element(driver, By.ID, "Deutschland", 5.0)
+            bundesland_elements = element.find_elements(By.TAG_NAME, "a")
+            for e in bundesland_elements:
+                bundesland_urls.append(e.get_attribute("xlink:href"))
+            print(bundesland_urls)
+
+            # Rufe hintereinander alle Bundesländer auf und schreibe aus jedem alle Städte-Links raus
+            # Da bestimmte Bundesländer (wie Berlin) sofort Autos anzeigen, wird erst getestet, ob das der Fall ist.
+            # Wenn ja, wird die Bundesland URL auch direkt zu den Städten hinzugefügt
+            for bundesland_url in bundesland_urls:
+                wait_random()
+                driver.get(bundesland_url)
+                if check_for_element(driver, By.CLASS_NAME, "opt-rank-list-section"):
+                    element = read_out_element(driver, By.XPATH, "/html/body/div/div[2]/div[4]/ol")
+                    stadt_elements = element.find_elements(By.TAG_NAME, "li")
+                    for e in stadt_elements:
+                        stadt_urls.append(e.find_element(By.TAG_NAME, "a").get_attribute("href"))
+                else:
+                    stadt_urls.append(bundesland_url)
+                print(str(stadt_urls) + "\n--------------")
+
+            # Speichere alle Stadt-URLs zwischen in eine txt-Datei
+            with open("city_urls.txt", mode="w", encoding="utf-8") as f:
+                json.dump(stadt_urls, f, ensure_ascii=False)
+                f.close()
 
         # Nachdem die URLs aller Städte ausgelesen wurden, rufe hintereinander alle Städte auf
         for stadt_url in stadt_urls:
@@ -116,8 +136,16 @@ def main() -> None:
             driver.get(stadt_url)
 
             # Rufe "alle Angebote anzeigen" für die jeweilige Stadt auf
-            element = read_out_element(driver, By.LINK_TEXT, "Alle Angebote anzeigen")
+            element = read_out_element(driver, type=By.LINK_TEXT, element_identifier="Alle Angebote anzeigen")
             driver.get(element.get_attribute("href"))
+
+            # schaue, wie viele Seiten (max 20) die Stadt hat und hole dir die URLs von allen Autos aus allen Seiten
+            page_navigator_bar: WebElement = read_out_element(driver, type=By.CSS_SELECTOR, element_identifier=".scr-pagination.FilteredListPagination_pagination__3WXZT")
+            pages: list[WebElement] = page_navigator_bar.find_elements(By.CSS_SELECTOR, ".pagination-item")
+            print("Anzahl an Seiten: " + str(pages[len(pages)-1].text))
+
+            main_row_element = read_out_element(driver, type=By.CSS_SELECTOR, element_identifier=".ListPage_main___0g2X")
+
             
 
     finally:
