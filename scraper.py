@@ -1,11 +1,12 @@
 import selenium
+import json
+import os
+import random
+import pandas as pd
+import time
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.remote.webelement import WebElement
 from pandas.core.frame import DataFrame
-import json
-
-
-import random
 from selenium.webdriver.remote.webelement import WebElement
 from tokenize import String
 from selenium import webdriver
@@ -15,12 +16,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import pandas as pd
-import time
 
 browser_path = "/usr/bin/firefox"
 
 result_dataframe: DataFrame = pd.DataFrame()
+
 
 def main() -> None:
     options = Options()
@@ -82,6 +82,22 @@ def main() -> None:
     service = Service(gecko_path)
     driver = webdriver.Firefox(service=service, options=options)
 
+    # Wenn es bereits gescrapdte URLs / Städte gibt, lese die vorher ein.
+    if os.path.exists("car_urls.txt"):
+        with open("car_urls.txt", "r", encoding="utf-8") as f:
+            car_urls = json.load(f)
+            f.close()
+    else:
+        print("keine Datei mit Car-URLs vorhanden. Erstelle neue leere.")
+        car_urls: list = []
+    if os.path.exists("scraped_cities.txt"):
+        with open("scraped_cities.txt", "r", encoding="utf-8") as f:
+            scraped_cities = json.load(f)
+            f.close
+    else:
+        scraped_cities = []
+        print("keine Datei mit gescrapten Städten vorhanden. Erstelle neue leere.")
+
     try:
         stadt_urls: list[str] = []
 
@@ -132,6 +148,17 @@ def main() -> None:
 
         # Nachdem die URLs aller Städte ausgelesen wurden, rufe hintereinander alle Städte auf
         for stadt_url in stadt_urls:
+            scraped_url_count = 0
+            double_url_count = 0
+            failed_scrapes_count = 0
+
+            print(f"************\nVersuche, {stadt_url} zu scrapen")
+
+            # Wurde die Stadt bereits schon mal gescraped? Wenn ja, überspringe sie.
+            if stadt_url in scraped_cities:
+                print("wurde schon mal gescraped, überspringe daher.")
+                continue
+
             wait_random()
             driver.get(stadt_url)
 
@@ -142,9 +169,44 @@ def main() -> None:
             # schaue, wie viele Seiten (max 20) die Stadt hat und hole dir die URLs von allen Autos aus allen Seiten
             page_navigator_bar: WebElement = read_out_element(driver, type=By.CSS_SELECTOR, element_identifier=".scr-pagination.FilteredListPagination_pagination__3WXZT")
             pages: list[WebElement] = page_navigator_bar.find_elements(By.CSS_SELECTOR, ".pagination-item")
-            print("Anzahl an Seiten: " + str(pages[len(pages)-1].text))
+            page_count: int = int(pages[len(pages)-1].text)
 
-            main_row_element = read_out_element(driver, type=By.CSS_SELECTOR, element_identifier=".ListPage_main___0g2X")
+            for p in range(page_count):
+                wait_random(1.0)
+                print("Scraping Page " + str(p+1))
+                main_row_element = read_out_element(driver, type=By.CSS_SELECTOR, element_identifier=".ListPage_main___0g2X")
+                entries = main_row_element.find_elements(By.TAG_NAME, "article")
+                for e in entries:
+                    try:
+                        url = e.find_element(By.TAG_NAME, "a").get_attribute("href")
+                        if url not in car_urls:
+                            car_urls.append(url)
+                            scraped_url_count += 1
+                        else:
+                            double_url_count += 1
+                    except:
+                        print(f"Scrape von entry {e.get_attribute('id')} fehlgeschlagen. Überspringe nach kurzem Delay.")
+                        wait_random(max=1.5)
+                        failed_scrapes_count += 1
+                
+                # Speichere alle bisherigen URLs zwischen, um bei einem Block Fortschrittverlust zu verhindern.
+                with open("car_urls.txt", mode="w", encoding="utf-8") as f:
+                    json.dump(car_urls, f, ensure_ascii=False)
+                    f.close()
+
+                if p+1 != page_count:
+                    next_page_button = read_out_element(driver, By.CSS_SELECTOR, element_identifier="[aria-label='Zu nächsten Seite']")
+                    next_page_button.click()
+            
+            print(f"+++++++++++\nStadt wurde vollständig gescraped, mit {scraped_url_count + double_url_count} neuen Einträgen.\n{double_url_count} URLs davon waren schon bekannt und wurden daher übersprungen.\n{failed_scrapes_count} Scrapes sind fehlgeschlagen.")
+
+            # wenn eine Stadt komplett gescraped wurde, speichere die Stadt in einer Separaten Datei zwischen.
+            scraped_cities.append(stadt_url)
+            with open("scraped_cities.txt", mode="w", encoding="utf-8") as f:
+                json.dump(scraped_cities, f, ensure_ascii=False)
+                f.close()
+
+
 
             
 
@@ -153,7 +215,7 @@ def main() -> None:
         driver.quit()
 
 
-def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 5.0) -> bool:
+def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 20.0) -> bool:
     """
     Prüft, ob ein spezifiziertes Element im DOM vorhanden ist.
 
@@ -182,7 +244,7 @@ def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: s
         return False
 
 
-def read_out_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 10.0) -> WebElement:
+def read_out_element(driver: webdriver.Firefox, type: By, element_identifier: str, timeout: float = 20.0) -> WebElement:
     """
     Hilfsfunktion, welche wartet, bis ein Element im DOM geladen ist und daraufhin das Element über den type und identifier zurückgibt.
 
