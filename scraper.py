@@ -185,7 +185,7 @@ def main() -> None:
                         else:
                             double_url_count += 1
                     except:
-                        print(f"Scrape von entry {e.get_attribute('id')} fehlgeschlagen. Überspringe nach kurzem Delay.")
+                        print(f"Scrape fehlgeschlagen. Überspringe nach kurzem Delay.")
                         wait_random(max=1.5)
                         failed_scrapes_count += 1
                 
@@ -228,7 +228,7 @@ def check_for_element(driver: webdriver.Firefox, type: By, element_identifier: s
     element_identifier : str
         Der eindeutige Identifier, welcher gesucht wird
     timeout : float
-        Die Zeit in Sekunden, welche das zu suchende Element maximal laden darf, bevor es als "nicht existierend" zurückgegeben wird, by default 5.0
+        Die Zeit in Sekunden, welche das zu suchende Element maximal laden darf, bevor es als "nicht existierend" zurückgegeben wird, by default 20.0
 
     Returns
     -------
@@ -257,7 +257,7 @@ def read_out_element(driver: webdriver.Firefox, type: By, element_identifier: st
     element_identifier : str
         Abhängig vom Typ der String, mit welchem das Element im DOM identifiziert werden kann.
     timeout : float, optional
-        Wie lange die Funktion maximal das Laden des Elements erwartet in Sekunden. Wird das Element nicht rechtzeitig geladen oder existiert nicht, wird eine TimeoutException geworfen, by default 10.0
+        Wie lange die Funktion maximal das Laden des Elements erwartet in Sekunden. Wird das Element nicht rechtzeitig geladen oder existiert nicht, wird eine TimeoutException geworfen, by default 20.0
 
     Returns
     -------
